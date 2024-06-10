@@ -16,7 +16,6 @@ class CropPredictionResult(models.Model):
 
 class ImageUpload(models.Model):
     image = models.ImageField(upload_to='images/')
-    crop_type = models.CharField(max_length=50)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
 class DiseasePredictionResult(models.Model):

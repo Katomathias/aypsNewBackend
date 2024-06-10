@@ -1,45 +1,18 @@
 # Prediction/views.py
+
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .utils import predict_crop, predict_disease
 from .serializers import SensorDataSerializer, ImageUploadSerializer
+from django.http import JsonResponse
+from.utils import load_maize_model, predict_disease
 
-# class SensorDataView(APIView):
-#     def post(self, request):
-#         serializer = SensorDataSerializer(data=request.data)
-#         if serializer.is_valid():
-#             npk_values = [
-#                 serializer.validated_data['nitrogen'],
-#                 serializer.validated_data['phosphorus'],
-#                 serializer.validated_data['potassium'],
-#                 serializer.validated_data['ph'],
-#                 serializer.validated_data['electroconductivity'],
-#                 serializer.validated_data['moisture']
-#             ]
-#             prediction = predict_crop(npk_values)
-#             return Response({'prediction': prediction.tolist()})  # Ensure the prediction is JSON serializable
-#         return Response(serializer.errors, status=400)
+import logging
+logger = logging.getLogger(__name__)
 
 
-# class SensorDataView(APIView):
-#     # parser_classes = (MultiPartParser, FormParser)
-#     parser_classes = (JSONParser,)
-
-#     def post(self, request):
-#         serializer = SensorDataSerializer(data=request.data)
-#         if serializer.is_valid():
-#             npk_values = [
-#                 serializer.validated_data['nitrogen'],
-#                 serializer.validated_data['phosphorus'],
-#                 serializer.validated_data['potassium'],
-#                 serializer.validated_data['ph'],
-#                 serializer.validated_data['electroconductivity'],
-#                 serializer.validated_data['moisture']
-#             ]
-#             prediction = predict_crop(npk_values)
-#             return Response({'prediction': prediction})  # Return crop prediction
-#         return Response(serializer.errors, status=400)
 class SensorDataView(APIView):
     parser_classes = (JSONParser,)
 
@@ -75,14 +48,49 @@ class SensorDataView(APIView):
         return Response({'prediction_message': prediction_message, 'sensor_data_message': sensor_data_message})
 
 
+# class ImageUploadView(APIView):
+#     parser_classes = (MultiPartParser, FormParser)
+
+#     def post(self, request):
+#         serializer = ImageUploadSerializer(data=request.data)
+#         if serializer.is_valid():
+#             try:
+#                 image = serializer.validated_data['image']
+#             except KeyError:
+#                 return Response({'error': 'Image field is required'}, status=400)
+            
+#             prediction = predict_disease(image.read())
+#             return Response({'prediction': prediction.tolist()})  # Ensure the prediction is JSON serializable
+#         return Response(serializer.errors, status=400)
+
+
 class ImageUploadView(APIView):
-    parser_classes = (MultiPartParser, FormParser)
+    parser_classes = (JSONParser,)
 
     def post(self, request):
         serializer = ImageUploadSerializer(data=request.data)
         if serializer.is_valid():
-            image = serializer.validated_data['image']
-            model_type = serializer.validated_data['model_type']
-            prediction = predict_disease(image.temporary_file_path(), model_type)
-            return Response({'prediction': prediction.tolist()})  # Ensure the prediction is JSON serializable
+            try:
+                image_url = serializer.validated_data['image_url']  # Extract the image URL
+            except KeyError:
+                return Response({'error': 'Image URL is required'}, status=400)
+            
+            # Load the maize model interpreter
+            maize_interpreter = load_maize_model()
+            
+            # Call predict_disease and directly use its return value since it's a string
+            prediction = predict_disease(image_url, maize_interpreter)
+            return Response({'prediction': prediction})  # Directly return the prediction string
         return Response(serializer.errors, status=400)
+    
+     
+    def upload_image(request):
+        image_url = request.POST.get('image_url')
+        try:
+            maize_interpreter = load_maize_model()
+            prediction = predict_disease(maize_interpreter, image_url)
+            return JsonResponse({'prediction': prediction}, safe=False)
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+
